@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: grafana
+    ports:
+      - 9000:3000
+    restart: unless-stopped
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+
+  dummy-service:
+    build:
+      context: ./dummy-service
+    image: dummy-service
+    container_name: dummy-service
+    ports:
+      - 8080:8080
+    env_file: .env
+
