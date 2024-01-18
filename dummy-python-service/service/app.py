@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from service.logging_handler import set_uvicorn_logger, get_uvicorn_logger
 from service.routers.main_router import main_router
 
-# load env vars
+# Get env vars
 load_dotenv()
 DEPLOYMENT_NAME = os.getenv("DEPLOYMENT_NAME")
 SERVICE_NAME = os.getenv("SERVICE_NAME")
@@ -19,26 +19,33 @@ LOGGER_NAME = os.getenv("LOGGER_NAME")
 LOG_DELAY_START = int(os.getenv("LOG_DELAY_START"))
 LOG_DELAY_DELTA = int(os.getenv("LOG_DELAY_DELTA"))
 
-# Init logger
-set_uvicorn_logger()
-
-# Init Loki logger
-# workaround for Grafana
-logging_loki.emitter.LokiEmitter.level_tag = "level"
-# create loki handler
+# Get PID, TID
 pid = os.getpid()
 tid = threading.get_ident()
-loki_handler = logging_loki.LokiHandler(
-   url="http://loki:3100/loki/api/v1/push",
-   tags={"deployment": DEPLOYMENT_NAME, "tid": f"{tid}", "pid": f"{pid}", "uid": f"{DEPLOYMENT_NAME}.{SERVICE_NAME}.{pid}.{tid}"},
-   auth=("username", "password"),
-   version="1",
-)
-# create a new logger instance, name it whatever you want
-loki_logger = logging.getLogger(LOGGER_NAME)
-loki_logger.addHandler(loki_handler)
-# make all levels visible in grafana
-loki_logger.setLevel(logging.DEBUG)
+
+
+# Init Loki logger
+def init_loki_logger():
+    # workaround for Grafana
+    logging_loki.emitter.LokiEmitter.level_tag = "level"
+    # create loki handler
+    loki_handler = logging_loki.LokiHandler(
+        url="http://loki:3100/loki/api/v1/push",
+        tags={"deployment": DEPLOYMENT_NAME, "tid": f"{tid}", "pid": f"{pid}", "uid": f"{DEPLOYMENT_NAME}.{SERVICE_NAME}.{pid}.{tid}"},
+        auth=("username", "password"),
+        version="1",
+    )
+    # create a new logger instance, name it whatever you want
+    loki_logger = logging.getLogger(LOGGER_NAME)
+    loki_logger.addHandler(loki_handler)
+    # make all levels visible in grafana
+    loki_logger.setLevel(logging.DEBUG)
+    return loki_logger
+
+
+def init_prometheus_logger():
+    return None
+
 
 def handle_exception(loop, context):
     # context["message"] will always be there; but context["exception"] may not
@@ -47,7 +54,7 @@ def handle_exception(loop, context):
     logger.error(f"Caught exception: {msg}")
 
 
-async def periodic():
+async def periodic(loki_logger, prometheus_logger):
     count = 0
     await asyncio.sleep(LOG_DELAY_START)
     loki_logger.debug("Entering log emitter loop...")
@@ -67,20 +74,34 @@ async def periodic():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Init
+    # Init uvicorn logger
+    set_uvicorn_logger()
     logger = get_uvicorn_logger()
     logger.info("Starting up service...")
+
+    # Init loki logger
+    loki_logger = init_loki_logger()
+
+    # Init Prometheus
+    prometheus_logger = init_prometheus_logger()
+
+    # Get loop
     loop = asyncio.get_event_loop()
+
+    # Set exception handler
     loop.set_exception_handler(handle_exception)
-    # Periodic Task
-    loop.create_task(periodic())
+
+    # Add Periodic Task to loop
+    loop.create_task(periodic(loki_logger, prometheus_logger))
+
     yield
+
     # Reset
     logger.info("Shutting down service...")
 
 
 # App
-app = FastAPI(title="Dummy Python Service", openapi_version="3.0.3", lifespan=lifespan)
+app = FastAPI(title=f"{DEPLOYMENT_NAME}.{SERVICE_NAME}", openapi_version="3.0.3", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
