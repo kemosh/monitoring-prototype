@@ -87,7 +87,7 @@ services:
       - LOG_DELAY_START=2
       - LOG_DELAY_DELTA=5
     ports:
-      - 8093:8092
+      - 8093:8093
     volumes:
     - ./dummy-python-service/service:/app/service:ro
     # entrypoint: tail -f /dev/null
