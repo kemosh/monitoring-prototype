@@ -4,6 +4,14 @@ networks:
   logs:
 
 services:
+  prometheus:
+    image: prom/prometheus:v2.49.1
+    container_name: prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
   loki:
     image: grafana/loki:2.9.0
     container_name: loki
@@ -14,6 +22,7 @@ services:
       - logs
 
   promtail:
+    profiles: ["disabled"]
     image: grafana/promtail:2.9.0
     depends_on:
       - loki
@@ -87,7 +96,7 @@ services:
       - LOG_DELAY_START=2
       - LOG_DELAY_DELTA=5
     ports:
-      - 8093:8093
+      - 8093:8092
     volumes:
     - ./dummy-python-service/service:/app/service:ro
     # entrypoint: tail -f /dev/null
@@ -102,4 +111,14 @@ services:
       timeout: 10s
       retries: 5
       start_period: 3s
+
+  dummy-java-service:
+    profiles: ["disabled"]
+    build:
+      context: ./dummy-java-service
+    image: dummy-java-service
+    container_name: dummy-java-service
+    ports:
+      - 8080:8080
+    env_file: .env
 
