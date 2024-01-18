@@ -22,15 +22,14 @@ services:
       - logs
 
   promtail:
-    profiles: ["disabled"]
+    #profiles: ["disabled"]
     image: grafana/promtail:2.9.0
     depends_on:
       - loki
     volumes:
-      - ./promtail/promtail.yaml:/etc/promtail/docker-config.yaml
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: -config.file=/etc/promtail/config.yml
+      - ./promtail/docker-config.yaml:/etc/promtail/docker-config.yaml
+    command: -config.file=/etc/promtail/docker-config.yaml
     networks:
       - logs
 
@@ -56,6 +55,10 @@ services:
     depends_on:
       - grafana
       - loki
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
     image: dummy-python-service:latest
     container_name: dummy-python-service-1
     env_file: .env
@@ -71,9 +74,6 @@ services:
     # entrypoint: tail -f /dev/null
     networks:
       - logs
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
     healthcheck:
       test: wget http://localhost:8092/liveness || exit 1
       interval: 180s
@@ -87,6 +87,10 @@ services:
     depends_on:
       - grafana
       - loki
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.ImageName}}|{{.Name}}|{{.ImageFullID}}|{{.FullID}}"
     image: dummy-python-service:latest
     container_name: dummy-python-service-2
     env_file: .env
@@ -102,9 +106,6 @@ services:
     # entrypoint: tail -f /dev/null
     networks:
       - logs
-    labels:
-      logging: "promtail"
-      logging_jobname: "containerlogs"
     healthcheck:
       test: wget http://localhost:8092/liveness || exit 1
       interval: 180s

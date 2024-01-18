@@ -35,9 +35,16 @@ def init_loki_logger():
         auth=("username", "password"),
         version="1",
     )
-    # create a new logger instance, name it whatever you want
+    # create console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_formatter = logging.Formatter("%(name)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s %(message)s")
+    console_handler.setFormatter(console_formatter)
+    # create a new named logger instance
     loki_logger = logging.getLogger(LOGGER_NAME)
+    # add loki handler
     loki_logger.addHandler(loki_handler)
+    # add console handler
+    loki_logger.addHandler(console_handler)
     # make all levels visible in grafana
     loki_logger.setLevel(logging.DEBUG)
     return loki_logger
