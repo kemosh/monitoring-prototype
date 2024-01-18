@@ -1,0 +1,105 @@
+version: "3"
+
+networks:
+  logs:
+
+services:
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    ports:
+      - 3100:3100
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - logs
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    depends_on:
+      - loki
+    volumes:
+      - ./promtail/promtail.yaml:/etc/promtail/docker-config.yaml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - logs
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: grafana
+    environment:
+      #- GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - logs
+
+  dummy-python-service-1:
+    build:
+      context: ./dummy-python-service
+    depends_on:
+      - grafana
+      - loki
+    image: dummy-python-service:latest
+    container_name: dummy-python-service-1
+    env_file: .env
+    environment:
+      - DEPLOYMENT_NAME=axxs-A
+      - SERVICE_NAME=axxs-service-1
+      - LOG_DELAY_START=0
+      - LOG_DELAY_DELTA=5
+    ports:
+      - 8092:8092
+    volumes:
+    - ./dummy-python-service/service:/app/service:ro
+    # entrypoint: tail -f /dev/null
+    networks:
+      - logs
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    healthcheck:
+      test: wget http://localhost:8092/liveness || exit 1
+      interval: 180s
+      timeout: 10s
+      retries: 5
+      start_period: 3s
+
+  dummy-python-service-2:
+    build:
+      context: ./dummy-python-service
+    depends_on:
+      - grafana
+      - loki
+    image: dummy-python-service:latest
+    container_name: dummy-python-service-2
+    env_file: .env
+    environment:
+      - DEPLOYMENT_NAME=axxs-B
+      - SERVICE_NAME=axxs-service-2
+      - LOG_DELAY_START=2
+      - LOG_DELAY_DELTA=5
+    ports:
+      - 8093:8092
+    volumes:
+    - ./dummy-python-service/service:/app/service:ro
+    # entrypoint: tail -f /dev/null
+    networks:
+      - logs
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    healthcheck:
+      test: wget http://localhost:8092/liveness || exit 1
+      interval: 180s
+      timeout: 10s
+      retries: 5
+      start_period: 3s
+
