@@ -13,6 +13,7 @@ from service.routers.main_router import main_router
 
 # Get env vars
 load_dotenv()
+LOKI_PUSH_API = "http://loki:3100/loki/api/v1/push"
 DEPLOYMENT_NAME = os.getenv("DEPLOYMENT_NAME")
 SERVICE_NAME = os.getenv("SERVICE_NAME")
 LOGGER_NAME = os.getenv("LOGGER_NAME")
@@ -30,14 +31,21 @@ def init_loki_logger():
     logging_loki.emitter.LokiEmitter.level_tag = "level"
     # create loki handler
     loki_handler = logging_loki.LokiHandler(
-        url="http://loki:3100/loki/api/v1/push",
-        tags={"deployment": DEPLOYMENT_NAME, "tid": f"{tid}", "pid": f"{pid}", "uid": f"{DEPLOYMENT_NAME}.{SERVICE_NAME}.{pid}.{tid}"},
+        url=LOKI_PUSH_API,
+        tags={
+            "deployment": DEPLOYMENT_NAME,
+            "tid": f"{tid}",
+            "pid": f"{pid}",
+            "uid": f"{DEPLOYMENT_NAME}.{SERVICE_NAME}.{pid}.{tid}",
+        },
         auth=("username", "password"),
         version="1",
     )
     # create console handler
     console_handler = logging.StreamHandler(sys.stdout)
-    console_formatter = logging.Formatter("%(name)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s %(message)s")
+    console_formatter = logging.Formatter(
+        "%(name)-12s %(asctime)s %(levelname)-8s %(filename)s:%(funcName)s %(message)s"
+    )
     console_handler.setFormatter(console_formatter)
     # create a new named logger instance
     loki_logger = logging.getLogger(LOGGER_NAME)
@@ -68,11 +76,20 @@ async def periodic(loki_logger, prometheus_logger):
     while True:
         pid = os.getpid()
         if count > 0:
-            loki_logger.info(f"Info event from {SERVICE_NAME}, count={count}", extra={"tags": {"service": SERVICE_NAME}})
+            loki_logger.info(
+                f"Info event from {SERVICE_NAME}, count={count}",
+                extra={"tags": {"service": SERVICE_NAME}},
+            )
         if count % 5 == 0:
-            loki_logger.warning(f"Warning event from {SERVICE_NAME}, count={count}", extra={"tags": {"service": SERVICE_NAME}})
+            loki_logger.warning(
+                f"Warning event from {SERVICE_NAME}, count={count}",
+                extra={"tags": {"service": SERVICE_NAME}},
+            )
         if count % 10 == 0:
-            loki_logger.error(f"Error event from {SERVICE_NAME}, count={count}", extra={"tags": {"service": SERVICE_NAME}})
+            loki_logger.error(
+                f"Error event from {SERVICE_NAME}, count={count}",
+                extra={"tags": {"service": SERVICE_NAME}},
+            )
         count += 1
         await asyncio.sleep(LOG_DELAY_DELTA)
     loki_logger.debug("Terminating log emitter loop...")
@@ -108,7 +125,11 @@ async def lifespan(app: FastAPI):
 
 
 # App
-app = FastAPI(title=f"{DEPLOYMENT_NAME}.{SERVICE_NAME}", openapi_version="3.0.3", lifespan=lifespan)
+app = FastAPI(
+    title=f"{DEPLOYMENT_NAME}.{SERVICE_NAME}",
+    openapi_version="3.0.3",
+    lifespan=lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
